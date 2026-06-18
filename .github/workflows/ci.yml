@@ -1,0 +1,42 @@
+name: Script Validation CI — OS Setup Toolkit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate-bash:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Validate configure_linux.sh syntax
+        run: shellcheck configure_linux.sh
+
+      - name: Check script is executable
+        run: bash -n configure_linux.sh && echo "✅ Bash syntax OK"
+
+  validate-powershell:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate PowerShell syntax
+        shell: pwsh
+        run: |
+          $errors = $null
+          $null = [System.Management.Automation.Language.Parser]::ParseFile(
+            "${{ github.workspace }}\Configure-Windows.ps1",
+            [ref]$null,
+            [ref]$errors
+          )
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Host "✅ PowerShell syntax OK — $($errors.Count) errors found"
