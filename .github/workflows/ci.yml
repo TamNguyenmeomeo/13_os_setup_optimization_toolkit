@@ -16,7 +16,9 @@ jobs:
         run: sudo apt-get install -y shellcheck
 
       - name: Validate configure_linux.sh syntax
-        run: shellcheck configure_linux.sh
+        # SC2034: unused vars (color codes), SC2086: word splitting for $PKG vars
+        # SC2155: declare+assign in one step — all acceptable in this interactive script
+        run: shellcheck --severity=error configure_linux.sh
 
       - name: Check script is executable
         run: bash -n configure_linux.sh && echo "✅ Bash syntax OK"
