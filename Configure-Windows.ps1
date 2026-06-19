@@ -1,5 +1,10 @@
+[CmdletBinding()]
+param(
+    [switch]$DryRun
+)
+
 # Configure-Windows.ps1
-# Automated Windows Configuration & Optimization Toolkit — v2.0 Interactive Menu
+# Automated Windows Configuration & Optimization Toolkit — v2.1 Interactive Menu
 # Designed for IT Support and SysAdmin deployment configurations.
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -9,9 +14,12 @@ $Host.UI.RawUI.WindowTitle = "IT OS Setup & Optimization Toolkit"
 function Write-Header {
     Clear-Host
     Write-Host "╔══════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║   🛠️  Windows IT Setup & Optimization Toolkit  v2.0      ║" -ForegroundColor Cyan
+    Write-Host "║   🛠️  Windows IT Setup & Optimization Toolkit  v2.1      ║" -ForegroundColor Cyan
     Write-Host "║   Automated SysAdmin toolset for IT Support teams        ║" -ForegroundColor DarkCyan
     Write-Host "╚══════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    if ($DryRun) {
+        Write-Host "   ⚠️ DRY RUN MODE ACTIVE — No changes will be applied ⚠️" -ForegroundColor Yellow
+    }
     Write-Host ""
 }
 
@@ -54,20 +62,36 @@ function Show-SystemInfo {
 # ── Action 2: Clean Temp Files ────────────────────────────────────────────────
 function Clean-TempFiles {
     Write-Host "`n[2] Cleaning Temporary System Files..." -ForegroundColor Yellow
+    if ($DryRun) { Write-Host " -> [Dry Run Mode Active]" -ForegroundColor Green }
     $tempPaths = @("$env:TEMP")
     if (Test-IsAdmin) { $tempPaths += "C:\Windows\Temp" }
     else { Log " -> [Notice] Running non-admin: C:\Windows\Temp skipped." }
 
     $freedBytes = 0
+    $limitCount = 0
     foreach ($path in $tempPaths) {
         if (Test-Path $path) {
             $files = Get-ChildItem -Path $path -Recurse -File -ErrorAction SilentlyContinue
             foreach ($f in $files) {
-                try { $freedBytes += $f.Length; Remove-Item $f.FullName -Force -ErrorAction SilentlyContinue } catch {}
+                try {
+                    $freedBytes += $f.Length
+                    if (-not $DryRun) {
+                        Remove-Item $f.FullName -Force -ErrorAction SilentlyContinue
+                    } else {
+                        if ($limitCount -lt 10) {
+                            Log "    [Dry-run] Would delete: $($f.FullName)"
+                            $limitCount++
+                        }
+                    }
+                } catch {}
             }
         }
     }
-    Log " -> Cleaning complete. Space recovered: $([Math]::Round($freedBytes / 1MB, 2)) MB"
+    if ($DryRun -and $limitCount -eq 10) {
+        Log "    ... (only first 10 files listed in Dry-run to avoid flood)"
+    }
+    $statusText = if ($DryRun) { "Would recover" } else { "recovered" }
+    Log " -> Cleaning simulation complete. Space $statusText: $([Math]::Round($freedBytes / 1MB, 2)) MB"
 }
 
 # ── Action 3: Firewall Status ─────────────────────────────────────────────────
@@ -147,9 +171,14 @@ function Install-CommonSoftware {
         $idx = [int]$choice - 1
         if ($idx -ge 0 -and $idx -lt $catalog.Count) {
             $pkg = $catalog[$idx]
-            Write-Host "`n   -> Installing $($pkg.name)..." -ForegroundColor Cyan
-            winget install --id $pkg.id --silent --accept-source-agreements --accept-package-agreements
-            Log "   -> Installed: $($pkg.name) [$($pkg.id)]"
+            if (-not $DryRun) {
+                Write-Host "`n   -> Installing $($pkg.name)..." -ForegroundColor Cyan
+                winget install --id $pkg.id --silent --accept-source-agreements --accept-package-agreements
+                Log "   -> Installed: $($pkg.name) [$($pkg.id)]"
+            } else {
+                Write-Host "`n   -> [Dry-run] Would install $($pkg.name) [$($pkg.id)]..." -ForegroundColor Green
+                Log "   -> [Dry-run] Simulated installation of $($pkg.name)"
+            }
         }
     }
 }
